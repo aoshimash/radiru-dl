@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/url"
 	"os/exec"
 	"strings"
 
@@ -11,7 +12,20 @@ import (
 	"github.com/sclevine/agouti"
 )
 
-func getDocument(url string) (*goquery.Document, error) {
+const (
+	// 番組ページURL(クエリパラメタ抜き)
+	rawProgramURLWithoutParam = "https://www.nhk.or.jp/radio/ondemand/detail.html"
+	// PlayerページURL(クエリパラメタ抜き)
+	rawPlayerURLWithoutParam = "https://www.nhk.or.jp/radio/player/ondemand.html"
+	// PlayerページにあるHLS-URLの要素
+	targetElemHLSURL = "html > body#playerwin > div#container_player.od > div#ODcontents > div.nol_audio_player"
+	// PlayerページにあるHLS-URLの属性
+	targetAttrHLSURL = "data-hlsurl"
+	// PlayerページにあるTitleの要素
+	targetElemTitle = "html > body#playerwin > div#container_player.od > div#ODcontents > div#bangumi > div#title > h3"
+)
+
+func getDocument(url *url.URL) (*goquery.Document, error) {
 
 	driver := agouti.ChromeDriver(
 		agouti.ChromeOptions("args", []string{
@@ -34,7 +48,7 @@ func getDocument(url string) (*goquery.Document, error) {
 		return nil, err
 	}
 
-	err = page.Navigate(url)
+	err = page.Navigate(url.String())
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +63,12 @@ func getDocument(url string) (*goquery.Document, error) {
 	return goquery.NewDocumentFromReader(reader)
 }
 
-func getHlsUrlFromPlayer(url string) (string, string, error) {
+func getHlsURLFromPlayer(urlParam string) (string, string, error) {
+
+	url, parseErr := url.Parse(rawPlayerURLWithoutParam + "?" + urlParam)
+	if parseErr != nil {
+		return "", "", parseErr
+	}
 
 	// Documentオブジェクトを取得
 	doc, err := getDocument(url)
@@ -58,16 +77,13 @@ func getHlsUrlFromPlayer(url string) (string, string, error) {
 	}
 
 	// hlsURLを検索
-	target_elem_hlsurl := "html > body#playerwin > div#container_player.od > div#ODcontents > div.nol_audio_player"
-	target_attr_hlsurl := "data-hlsurl"
-	hlsURL, exists := doc.Find(target_elem_hlsurl).Attr(target_attr_hlsurl)
+	hlsURL, exists := doc.Find(targetElemHLSURL).Attr(targetAttrHLSURL)
 	if !exists {
 		return "", "", fmt.Errorf("coulden't find hlsURL")
 	}
 
 	// Title検索
-	target_elem_title := "html > body#playerwin > div#container_player.od > div#ODcontents > div#bangumi > div#title > h3"
-	title := doc.Find(target_elem_title).Text()
+	title := doc.Find(targetElemTitle).Text()
 
 	return hlsURL, title, nil
 }
@@ -82,18 +98,17 @@ func main() {
 	url := args[0]
 
 	// M3U8のURLを取得
-	hlsURL, title, err_get_hlsurl := getHlsUrlFromPlayer(url)
-	if err_get_hlsurl != nil {
-		log.Fatalf("Failed to get HLS url: %v", err_get_hlsurl)
+	hlsURL, title, errGetHLSURL := getHlsURLFromPlayer(url)
+	if errGetHLSURL != nil {
+		log.Fatalf("Failed to get HLS url: %v", errGetHLSURL)
 	}
 
 	output := "output/" + title + ".aac"
 	fmt.Printf("Downloading '%v' from '%v'\n)", title, hlsURL)
 
 	// ffmpegでM3U8をダウンロード
-	err_download_m3u8 := exec.Command("ffmpeg", "-i", hlsURL, "-write_xing", "0", output).Run()
-	if err_download_m3u8 != nil {
-		log.Panicf("%v\n", err_download_m3u8)
+	errDownloadM3U8 := exec.Command("ffmpeg", "-i", hlsURL, "-write_xing", "0", output).Run()
+	if errDownloadM3U8 != nil {
+		log.Panicf("%v\n", errDownloadM3U8)
 	}
-
 }
