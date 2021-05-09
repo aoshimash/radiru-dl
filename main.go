@@ -15,6 +15,8 @@ import (
 const (
 	// 番組ページURL(クエリパラメタ抜き)
 	rawProgramURLWithoutParam = "https://www.nhk.or.jp/radio/ondemand/detail.html"
+	// 番組ページにあるplayerのクエリパラメタがある要素
+	targetElemPlayerParam = "html > body#pagetop > div#container > div#main > div.inner > div.progblock > div.block"
 	// PlayerページURL(クエリパラメタ抜き)
 	rawPlayerURLWithoutParam = "https://www.nhk.or.jp/radio/player/ondemand.html"
 	// PlayerページにあるHLS-URLの要素
@@ -63,13 +65,30 @@ func getDocument(url *url.URL) (*goquery.Document, error) {
 	return goquery.NewDocumentFromReader(reader)
 }
 
-func getHlsURLFromPlayer(urlParam string) (string, string, error) {
-
-	url, parseErr := url.Parse(rawPlayerURLWithoutParam + "?" + urlParam)
-	if parseErr != nil {
-		return "", "", parseErr
+func getPlayerParamsFromProgramPage(url *url.URL) ([]string, error) {
+	// Documentオブジェクトを取得
+	doc, err := getDocument(url)
+	if err != nil {
+		return nil, err
 	}
 
+	// Playerのパラメタリストを取得
+	playerParams := []string{}
+	doc.Find(targetElemPlayerParam).Each(func(i int, s *goquery.Selection) {
+		elem, _ := s.Find("li > a").Attr("href")
+		/*
+			if !exists {
+				return nil, nil
+			}
+		*/
+		playerParam := strings.Split(elem, "'")[1]
+		playerParams = append(playerParams, playerParam)
+	})
+
+	return playerParams, nil
+}
+
+func getHLSURLFromPlayerPage(url *url.URL) (string, string, error) {
 	// Documentオブジェクトを取得
 	doc, err := getDocument(url)
 	if err != nil {
@@ -95,20 +114,50 @@ func main() {
 	if len(args) != 1 {
 		log.Fatalf("Unexpected arguments %v\n", args)
 	}
-	url := args[0]
+	rawURL := args[0]
 
-	// M3U8のURLを取得
-	hlsURL, title, errGetHLSURL := getHlsURLFromPlayer(url)
-	if errGetHLSURL != nil {
-		log.Fatalf("Failed to get HLS url: %v", errGetHLSURL)
+	// URL生成
+	targetURL, parseErr := url.Parse(rawURL)
+	if parseErr != nil {
+		log.Fatalf("Failed to Parse URL %v\n", rawURL)
 	}
 
-	output := "output/" + title + ".aac"
-	fmt.Printf("Downloading '%v' from '%v'\n)", title, hlsURL)
+	// URLが"番組"と"プレイヤー"どちらかの場合で処理を分岐
+	rawURLWithoutParam := strings.Split(rawURL, "?")[0]
+	var playerURLs []*url.URL
+	if rawURLWithoutParam == rawProgramURLWithoutParam {
+		playerParams, e := getPlayerParamsFromProgramPage(targetURL)
+		if e != nil {
+			log.Fatalf("Failed when analysing %v %v\n", targetURL.String(), e)
+		}
+		for _, playerParam := range playerParams {
+			rawPlayerURL := rawPlayerURLWithoutParam + "?" + playerParam
+			playerURL, playerURLParseErr := url.Parse(rawPlayerURL)
+			if playerURLParseErr != nil {
+				log.Fatalf("Failed to Parse Player URL %v\n", rawPlayerURL)
+			}
+			playerURLs = append(playerURLs, playerURL)
+		}
 
-	// ffmpegでM3U8をダウンロード
-	errDownloadM3U8 := exec.Command("ffmpeg", "-i", hlsURL, "-write_xing", "0", output).Run()
-	if errDownloadM3U8 != nil {
-		log.Panicf("%v\n", errDownloadM3U8)
+	} else if rawURLWithoutParam == rawPlayerURLWithoutParam {
+		playerURLs = []*url.URL{targetURL}
+	} else {
+		log.Fatalf("Unexpected URL")
+	}
+
+	// M3U8のURLを取得
+	for _, playerURL := range playerURLs {
+		hlsURL, title, errGetHLSURL := getHLSURLFromPlayerPage(playerURL)
+		if errGetHLSURL != nil {
+			log.Fatalf("Failed to get HLS url (%v)", errGetHLSURL)
+		}
+		output := "output/" + title + ".aac"
+		fmt.Printf("Downloading '%v' from '%v'\n", title, hlsURL)
+
+		// ffmpegでM3U8をダウンロード
+		errDownloadM3U8 := exec.Command("ffmpeg", "-i", hlsURL, "-write_xing", "0", output).Run()
+		if errDownloadM3U8 != nil {
+			log.Panicf("%v\n", errDownloadM3U8)
+		}
 	}
 }
