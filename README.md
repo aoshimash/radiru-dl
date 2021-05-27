@@ -8,20 +8,28 @@
 
 イメージプル
 
-```
+```bash
 $ docker pull aoshimash/radiru-dl:latest
 ```
 
-音声ファイルダウンロード
 
-```
-$ docker run -v $(pwd)/output:/root/output -it aoshimash/radiru-dl <プレイヤーURL> <出力ファイル名>
+番組ページのURLまたはプレイヤーページのURLを指定して音声ファイルをダウンロードすることができます。
+
+番組ページとは`https://www.nhk.or.jp/radio/ondemand/detail.html?p=****_**` のことです。番組ページを指定した場合はページ内の全放送が録音されます。
+プレイヤーページとは、``https://www.nhk.or.jp/radio/player/ondemand.html?p=****_**_*****` のことです。プレイヤーページを指定した場合はそのプレイヤーで放送される１番組のみが録音されます。
+番組ごとプレイヤーごとに最後のクエリストリングが異なります。
+
+
+```bash
+$ docker run -v $(pwd)/output:/root/output -it aoshimash/radiru-dl <番組ページURL/プレイヤーURL>
 ```
 
 e.g.
 
-```
-$ docker run -v $(pwd)/output:/root/output -it aoshimash/radiru-dl "https://www.nhk.or.jp/radio/player/ondemand.html?p=0915_01_3208917" "まいにち中国語_第10課.aac"
+```bash
+$ docker run -v $(pwd)/output:/root/output -it aoshimash/radiru-dl "https://www.nhk.or.jp/radio/ondemand/detail.html?p=0045_01"
 ```
 
-プレイヤーURLは `https://www.nhk.or.jp/radio/player/ondemand.html` にクエリ文字列を追加したもの。
+```bash
+$ docker run -v $(pwd)/output:/root/output -it aoshimash/radiru-dl "https://www.nhk.or.jp/radio/player/ondemand.html?p=0045_01_44612"
+```
