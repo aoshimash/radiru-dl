@@ -8,7 +8,8 @@ RUN go mod download
 RUN apt-get update && apt-get install -y unzip
 
 RUN go build -o ./main ./main.go
-RUN wget https://chromedriver.storage.googleapis.com/90.0.4430.24/chromedriver_linux64.zip
+RUN CHROMEDRIVER_VERSION=`curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE` \
+  && wget http://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip
 RUN unzip ./chromedriver_linux64.zip
 
 
