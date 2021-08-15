@@ -14,17 +14,17 @@ import (
 
 const (
 	// 番組ページURL(クエリパラメタ抜き)
-	rawProgramURLWithoutParam = "https://www.nhk.or.jp/radio/ondemand/detail.html"
+	PROGRAM_BASE_URL = "https://www.nhk.or.jp/radio/ondemand/detail.html"
 	// 番組ページにあるplayerのクエリパラメタがある要素
-	targetElemPlayerParam = "html > body#pagetop > div#container > div#main > div.inner > div.progblock > div.block"
+	SELECTOR_TO_FIND_QUERY_PARAMETER = "html > body#pagetop > div#container > div#main > div.inner > div.progblock > div.block"
 	// PlayerページURL(クエリパラメタ抜き)
-	rawPlayerURLWithoutParam = "https://www.nhk.or.jp/radio/player/ondemand.html"
+	PLAYER_BASE_URL = "https://www.nhk.or.jp/radio/player/ondemand.html"
 	// PlayerページにあるHLS-URLの要素
-	targetElemHLSURL = "html > body#playerwin > div#container_player.od > div#ODcontents > div.nol_audio_player"
+	SELECTOR_TO_FIND_HLS_URL = "html > body#playerwin > div#container_player.od > div#ODcontents > div.nol_audio_player"
 	// PlayerページにあるHLS-URLの属性
-	targetAttrHLSURL = "data-hlsurl"
+	ATTR_NAME_TO_FIND_HLS_URL = "data-hlsurl"
 	// PlayerページにあるTitleの要素
-	targetElemTitle = "html > body#playerwin > div#container_player.od > div#ODcontents > div#bangumi > div#title > h3"
+	SELECTOR_TO_FIND_TITLE = "html > body#playerwin > div#container_player.od > div#ODcontents > div#bangumi > div#title > h3"
 )
 
 type RadiruPlayer struct {
@@ -80,7 +80,7 @@ func getPlayerParamsFromProgramPage(url *url.URL) ([]string, error) {
 
 	// Playerのパラメタリストを取得
 	playerParams := []string{}
-	doc.Find(targetElemPlayerParam).Each(func(i int, s *goquery.Selection) {
+	doc.Find(SELECTOR_TO_FIND_QUERY_PARAMETER).Each(func(i int, s *goquery.Selection) {
 		elem, _ := s.Find("li > a").Attr("href")
 		/*
 			if !exists {
@@ -94,7 +94,7 @@ func getPlayerParamsFromProgramPage(url *url.URL) ([]string, error) {
 	return playerParams, nil
 }
 
-func getRadiruPlayer(url *url.URL) (playerInfo RadiruPlayer, err error) {
+func getRadiruPlayer(url *url.URL) (radiruPlayer RadiruPlayer, err error) {
 	// Documentオブジェクトを取得
 	doc, err := getGoqueryDocument(url)
 	if err != nil {
@@ -102,7 +102,7 @@ func getRadiruPlayer(url *url.URL) (playerInfo RadiruPlayer, err error) {
 	}
 
 	// hlsURLを検索
-	hlsURLStr, exists := doc.Find(targetElemHLSURL).Attr(targetAttrHLSURL)
+	hlsURLStr, exists := doc.Find(SELECTOR_TO_FIND_HLS_URL).Attr(ATTR_NAME_TO_FIND_HLS_URL)
 	if !exists {
 		err = fmt.Errorf("coulden't find hlsURL")
 		return
@@ -113,9 +113,9 @@ func getRadiruPlayer(url *url.URL) (playerInfo RadiruPlayer, err error) {
 	}
 
 	// Title検索
-	title := doc.Find(targetElemTitle).Text()
+	title := doc.Find(SELECTOR_TO_FIND_TITLE).Text()
 
-	playerInfo = RadiruPlayer{
+	radiruPlayer = RadiruPlayer{
 		hlsURL: hlsURL,
 		title:  title,
 	}
@@ -141,13 +141,13 @@ func main() {
 	// URLが"番組"と"プレイヤー"どちらかの場合で処理を分岐
 	rawURLWithoutParam := strings.Split(rawURL, "?")[0]
 	var playerURLs []*url.URL
-	if rawURLWithoutParam == rawProgramURLWithoutParam {
+	if rawURLWithoutParam == PROGRAM_BASE_URL {
 		playerParams, e := getPlayerParamsFromProgramPage(targetURL)
 		if e != nil {
 			log.Fatalf("Failed when analysing %v %v\n", targetURL.String(), e)
 		}
 		for _, playerParam := range playerParams {
-			rawPlayerURL := rawPlayerURLWithoutParam + "?" + playerParam
+			rawPlayerURL := PLAYER_BASE_URL + "?" + playerParam
 			playerURL, playerURLParseErr := url.Parse(rawPlayerURL)
 			if playerURLParseErr != nil {
 				log.Fatalf("Failed to Parse Player URL %v\n", rawPlayerURL)
@@ -155,7 +155,7 @@ func main() {
 			playerURLs = append(playerURLs, playerURL)
 		}
 
-	} else if rawURLWithoutParam == rawPlayerURLWithoutParam {
+	} else if rawURLWithoutParam == PLAYER_BASE_URL {
 		playerURLs = []*url.URL{targetURL}
 	} else {
 		log.Fatalf("Unexpected URL")
