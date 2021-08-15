@@ -14,11 +14,11 @@ import (
 
 const (
 	// 番組ページURL(クエリパラメタ抜き)
-	PROGRAM_BASE_URL = "https://www.nhk.or.jp/radio/ondemand/detail.html"
+	PROGRAM_URL = "https://www.nhk.or.jp/radio/ondemand/detail.html"
 	// 番組ページにあるplayerのクエリパラメタがある要素
 	SELECTOR_TO_FIND_QUERY_PARAMETER = "html > body#pagetop > div#container > div#main > div.inner > div.progblock > div.block"
 	// PlayerページURL(クエリパラメタ抜き)
-	PLAYER_BASE_URL = "https://www.nhk.or.jp/radio/player/ondemand.html"
+	PLAYER_URL = "https://www.nhk.or.jp/radio/player/ondemand.html"
 	// PlayerページにあるHLS-URLの要素
 	SELECTOR_TO_FIND_HLS_URL = "html > body#playerwin > div#container_player.od > div#ODcontents > div.nol_audio_player"
 	// PlayerページにあるHLS-URLの属性
@@ -127,24 +127,25 @@ func main() {
 	if len(args) != 1 {
 		log.Fatalf("Unexpected arguments %v\n", args)
 	}
-	rawURL := args[0]
+	urlStr := args[0]
 
 	// URL生成
-	targetURL, parseErr := url.Parse(rawURL)
+	targetURL, parseErr := url.Parse(urlStr)
 	if parseErr != nil {
-		log.Fatalf("Failed to Parse URL %v\n", rawURL)
+		log.Fatalf("Failed to Parse URL %v\n", urlStr)
 	}
 
 	// URLが"番組"と"プレイヤー"どちらかの場合で処理を分岐
-	rawURLWithoutParam := strings.Split(rawURL, "?")[0]
+	urlStrWithoutParam := strings.Split(urlStr, "?")[0]
 	var playerURLs []*url.URL
-	if rawURLWithoutParam == PROGRAM_BASE_URL {
+	if urlStrWithoutParam == PROGRAM_URL {
 		playerParams, e := getPlayerParamsFromProgramPage(targetURL)
 		if e != nil {
 			log.Fatalf("Failed when analysing %v %v\n", targetURL.String(), e)
 		}
+		fmt.Printf("playerParams: %v\n", playerParams)
 		for _, playerParam := range playerParams {
-			rawPlayerURL := PLAYER_BASE_URL + "?" + playerParam
+			rawPlayerURL := PLAYER_URL + "?" + playerParam
 			playerURL, playerURLParseErr := url.Parse(rawPlayerURL)
 			if playerURLParseErr != nil {
 				log.Fatalf("Failed to Parse Player URL %v\n", rawPlayerURL)
@@ -152,7 +153,7 @@ func main() {
 			playerURLs = append(playerURLs, playerURL)
 		}
 
-	} else if rawURLWithoutParam == PLAYER_BASE_URL {
+	} else if urlStrWithoutParam == PLAYER_URL {
 		playerURLs = []*url.URL{targetURL}
 	} else {
 		log.Fatalf("Unexpected URL")
