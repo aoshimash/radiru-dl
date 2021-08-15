@@ -71,27 +71,24 @@ func getGoqueryDocument(url *url.URL) (doc *goquery.Document, err error) {
 	return
 }
 
-func getPlayerParamsFromProgramPage(url *url.URL) ([]string, error) {
+func getPlayerParamsFromProgramPage(url *url.URL) (playerParams []string, err error) {
 	// Documentオブジェクトを取得
 	doc, err := getGoqueryDocument(url)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// Playerのパラメタリストを取得
-	playerParams := []string{}
 	doc.Find(SELECTOR_TO_FIND_QUERY_PARAMETER).Each(func(i int, s *goquery.Selection) {
-		elem, _ := s.Find("li > a").Attr("href")
-		/*
-			if !exists {
-				return nil, nil
-			}
-		*/
+		elem, err := s.Find("li > a").Attr("href")
+		if !err {
+			return
+		}
 		playerParam := strings.Split(elem, "'")[1]
 		playerParams = append(playerParams, playerParam)
 	})
 
-	return playerParams, nil
+	return
 }
 
 func getRadiruPlayer(url *url.URL) (radiruPlayer RadiruPlayer, err error) {
