@@ -27,6 +27,11 @@ const (
 	targetElemTitle = "html > body#playerwin > div#container_player.od > div#ODcontents > div#bangumi > div#title > h3"
 )
 
+type PlayerInfo struct {
+	hlsURL *url.URL
+	title  string
+}
+
 func getDocument(url *url.URL) (*goquery.Document, error) {
 
 	driver := agouti.ChromeDriver(
@@ -88,23 +93,33 @@ func getPlayerParamsFromProgramPage(url *url.URL) ([]string, error) {
 	return playerParams, nil
 }
 
-func getHLSURLFromPlayerPage(url *url.URL) (string, string, error) {
+func getHLSURLFromPlayerPage(url *url.URL) (playerInfo PlayerInfo, err error) {
 	// Documentオブジェクトを取得
 	doc, err := getDocument(url)
 	if err != nil {
-		return "", "", err
+		return
 	}
 
 	// hlsURLを検索
-	hlsURL, exists := doc.Find(targetElemHLSURL).Attr(targetAttrHLSURL)
+	hlsURLStr, exists := doc.Find(targetElemHLSURL).Attr(targetAttrHLSURL)
 	if !exists {
-		return "", "", fmt.Errorf("coulden't find hlsURL")
+		err = fmt.Errorf("coulden't find hlsURL")
+		return
+	}
+	hlsURL, err := url.Parse(hlsURLStr)
+	if err != nil {
+		return
 	}
 
 	// Title検索
 	title := doc.Find(targetElemTitle).Text()
 
-	return hlsURL, title, nil
+	playerInfo = PlayerInfo{
+		hlsURL: hlsURL,
+		title:  title,
+	}
+
+	return
 }
 
 func main() {
@@ -147,17 +162,18 @@ func main() {
 
 	// M3U8のURLを取得
 	for _, playerURL := range playerURLs {
-		hlsURL, title, errGetHLSURL := getHLSURLFromPlayerPage(playerURL)
-		if errGetHLSURL != nil {
-			log.Fatalf("Failed to get HLS url (%v)", errGetHLSURL)
+		//hlsURL, title, errGetHLSURL := getHLSURLFromPlayerPage(playerURL)
+		playerInfo, err := getHLSURLFromPlayerPage(playerURL)
+		if err != nil {
+			log.Fatalf("Failed to get HLS url (%v)", err)
 		}
-		output := "output/" + title + ".aac"
-		fmt.Printf("Downloading '%v' from '%v'\n", title, hlsURL)
+		output := "output/" + playerInfo.title + ".aac"
+		fmt.Printf("Downloading '%v' from '%v'\n", playerInfo.title, playerInfo.hlsURL)
 
 		// ffmpegでM3U8をダウンロード
-		errDownloadM3U8 := exec.Command("ffmpeg", "-i", hlsURL, "-write_xing", "0", output).Run()
-		if errDownloadM3U8 != nil {
-			log.Panicf("%v\n", errDownloadM3U8)
+		err = exec.Command("ffmpeg", "-i", playerInfo.hlsURL.String(), "-write_xing", "0", output).Run()
+		if err != nil {
+			log.Panicf("%v\n", err)
 		}
 	}
 }
