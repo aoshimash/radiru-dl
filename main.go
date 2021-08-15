@@ -120,6 +120,45 @@ func getRadiruPlayer(url *url.URL) (radiruPlayer RadiruPlayer, err error) {
 	return
 }
 
+func getRadiruPlayers(targetURL *url.URL) (radiruPlayers []RadiruPlayer, err error) {
+	// URLが"番組"と"プレイヤー"どちらかの場合で処理を分岐
+	urlStrWithoutParam := strings.Split(targetURL.String(), "?")[0]
+	var playerURLs []*url.URL
+	if urlStrWithoutParam == PROGRAM_URL {
+		var playerParams []string
+		playerParams, err = getPlayerParamsFromProgramPage(targetURL)
+		if err != nil {
+			return
+		}
+
+		for _, playerParam := range playerParams {
+			rawPlayerURL := PLAYER_URL + "?" + playerParam
+			var playerURL *url.URL
+			playerURL, err = url.Parse(rawPlayerURL)
+			if err != nil {
+				return
+			}
+			playerURLs = append(playerURLs, playerURL)
+		}
+	} else if urlStrWithoutParam == PLAYER_URL {
+		playerURLs = append(playerURLs, targetURL)
+	} else {
+		err = fmt.Errorf("invalid URL")
+		return
+	}
+
+	// RadiruPlayerを取得
+	for _, playerURL := range playerURLs {
+		var radiruPlayer RadiruPlayer
+		radiruPlayer, err = getRadiruPlayer(playerURL)
+		if err != nil {
+			return
+		}
+		radiruPlayers = append(radiruPlayers, radiruPlayer)
+	}
+	return
+}
+
 func main() {
 	// コマンドライン引数の処理
 	flag.Parse()
@@ -134,41 +173,9 @@ func main() {
 	if parseErr != nil {
 		log.Fatalf("Failed to Parse URL %v\n", urlStr)
 	}
-
-	// URLが"番組"と"プレイヤー"どちらかの場合で処理を分岐
-	urlStrWithoutParam := strings.Split(urlStr, "?")[0]
-	var playerURLs []*url.URL
-	if urlStrWithoutParam == PROGRAM_URL {
-		playerParams, e := getPlayerParamsFromProgramPage(targetURL)
-		if e != nil {
-			log.Fatalf("Failed when analysing %v %v\n", targetURL.String(), e)
-		}
-		fmt.Printf("playerParams: %v\n", playerParams)
-		for _, playerParam := range playerParams {
-			rawPlayerURL := PLAYER_URL + "?" + playerParam
-			playerURL, playerURLParseErr := url.Parse(rawPlayerURL)
-			if playerURLParseErr != nil {
-				log.Fatalf("Failed to Parse Player URL %v\n", rawPlayerURL)
-			}
-			playerURLs = append(playerURLs, playerURL)
-		}
-
-	} else if urlStrWithoutParam == PLAYER_URL {
-		playerURLs = []*url.URL{targetURL}
-	} else {
-		log.Fatalf("Unexpected URL")
-	}
-
-	// RadiruPlayerを取得
-	var radiruPlayers []RadiruPlayer
-	for _, playerURL := range playerURLs {
-		radiruPlayer, err := getRadiruPlayer(playerURL)
-		if err != nil {
-			log.Fatalf("Failed to get HLS url (%v)", err)
-		}
-		radiruPlayers = append(radiruPlayers, radiruPlayer)
-		//output := "output/" + playerInfo.title + ".aac"
-		//fmt.Printf("Downloading '%v' from '%v'\n", playerInfo.title, playerInfo.hlsURL)
+	radiruPlayers, err := getRadiruPlayers(targetURL)
+	if err != nil {
+		log.Fatalf("Failed to get RadiruPlayers %v\n", err)
 	}
 
 	fmt.Println("Radiru Player")
