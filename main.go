@@ -27,12 +27,12 @@ const (
 	targetElemTitle = "html > body#playerwin > div#container_player.od > div#ODcontents > div#bangumi > div#title > h3"
 )
 
-type PlayerInfo struct {
+type RadiruPlayer struct {
 	hlsURL *url.URL
 	title  string
 }
 
-func getDocument(url *url.URL) (*goquery.Document, error) {
+func getGoqueryDocument(url *url.URL) (doc *goquery.Document, err error) {
 
 	driver := agouti.ChromeDriver(
 		agouti.ChromeOptions("args", []string{
@@ -44,35 +44,36 @@ func getDocument(url *url.URL) (*goquery.Document, error) {
 			"disable-dev-shm-usage",
 		}),
 	)
-	err := driver.Start()
+	err = driver.Start()
 	if err != nil {
-		return nil, err
+		return
 	}
 	defer driver.Stop()
 
 	page, err := driver.NewPage(agouti.Browser("chrome"))
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	err = page.Navigate(url.String())
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	content, err := page.HTML()
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	reader := strings.NewReader(content)
+	doc, err = goquery.NewDocumentFromReader(reader)
 
-	return goquery.NewDocumentFromReader(reader)
+	return
 }
 
 func getPlayerParamsFromProgramPage(url *url.URL) ([]string, error) {
 	// Documentオブジェクトを取得
-	doc, err := getDocument(url)
+	doc, err := getGoqueryDocument(url)
 	if err != nil {
 		return nil, err
 	}
@@ -93,9 +94,9 @@ func getPlayerParamsFromProgramPage(url *url.URL) ([]string, error) {
 	return playerParams, nil
 }
 
-func getHLSURLFromPlayerPage(url *url.URL) (playerInfo PlayerInfo, err error) {
+func getRadiruPlayer(url *url.URL) (playerInfo RadiruPlayer, err error) {
 	// Documentオブジェクトを取得
-	doc, err := getDocument(url)
+	doc, err := getGoqueryDocument(url)
 	if err != nil {
 		return
 	}
@@ -114,7 +115,7 @@ func getHLSURLFromPlayerPage(url *url.URL) (playerInfo PlayerInfo, err error) {
 	// Title検索
 	title := doc.Find(targetElemTitle).Text()
 
-	playerInfo = PlayerInfo{
+	playerInfo = RadiruPlayer{
 		hlsURL: hlsURL,
 		title:  title,
 	}
@@ -160,20 +161,31 @@ func main() {
 		log.Fatalf("Unexpected URL")
 	}
 
-	// M3U8のURLを取得
+	// RadiruPlayerを取得
+	var radiruPlayers []RadiruPlayer
 	for _, playerURL := range playerURLs {
-		//hlsURL, title, errGetHLSURL := getHLSURLFromPlayerPage(playerURL)
-		playerInfo, err := getHLSURLFromPlayerPage(playerURL)
+		radiruPlayer, err := getRadiruPlayer(playerURL)
 		if err != nil {
 			log.Fatalf("Failed to get HLS url (%v)", err)
 		}
-		output := "output/" + playerInfo.title + ".aac"
-		fmt.Printf("Downloading '%v' from '%v'\n", playerInfo.title, playerInfo.hlsURL)
+		radiruPlayers = append(radiruPlayers, radiruPlayer)
+		//output := "output/" + playerInfo.title + ".aac"
+		//fmt.Printf("Downloading '%v' from '%v'\n", playerInfo.title, playerInfo.hlsURL)
+	}
 
-		// ffmpegでM3U8をダウンロード
-		err = exec.Command("ffmpeg", "-i", playerInfo.hlsURL.String(), "-write_xing", "0", output).Run()
+	fmt.Println("Radiru Player")
+	for _, radiruPlayer := range radiruPlayers {
+		fmt.Printf("title: %s, hlsURL: %s\n", radiruPlayer.title, radiruPlayer.hlsURL)
+	}
+
+	// ffmpegでM3U8をダウンロード
+	for _, radiruPlayer := range radiruPlayers {
+		output := "output/" + radiruPlayer.title + ".aac"
+		fmt.Printf("Downloading '%v'\n", output)
+		err := exec.Command("ffmpeg", "-i", radiruPlayer.hlsURL.String(), "-write_xing", "0", output).Run()
 		if err != nil {
 			log.Panicf("%v\n", err)
 		}
 	}
+
 }
